@@ -1,27 +1,25 @@
 ﻿using FastGithub.Dns;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FastGithub
 {
     /// <summary>
-    /// 服务注册扩展
+    /// dns服务注册扩展
     /// </summary>
     public static class DnsServiceCollectionExtensions
     {
         /// <summary>
-        /// 注册github的dns服务
+        /// 注册dns服务
         /// </summary>
-        /// <param name="services"></param>
-        /// <param name="configuration">配置</param>  
+        /// <param name="services"></param> 
         /// <returns></returns>
-        public static IServiceCollection AddGithubDns(this IServiceCollection services, IConfiguration configuration)
+        public static IServiceCollection AddDnsServer(this IServiceCollection services)
         {
-            var assembly = typeof(DnsServiceCollectionExtensions).Assembly;
-            return services          
-                .AddServiceAndOptions(assembly, configuration)
-                .AddHostedService<DnsHostedService>()
-                .AddGithubScanner(configuration);
+            return services
+                .AddSingleton<RequestResolver>()
+                .AddSingleton<DnsServer>()
+                .AddSingleton<HostsFileValidator>()
+                .AddHostedService<DnsHostedService>();
         }
     }
 }

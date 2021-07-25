@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net5.0</TargetFramework>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+		<PackageReference Include="Portable.BouncyCastle" Version="1.8.10" />
+		<PackageReference Include="Yarp.ReverseProxy" Version="1.0.0-preview.12.21328.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\FastGithub.Core\FastGithub.Core.csproj" />
+		<ProjectReference Include="..\FastGithub.Http\FastGithub.Http.csproj" />
+	</ItemGroup>
+
+</Project>

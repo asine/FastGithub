@@ -1,15 +1,36 @@
 ﻿# FastGithub
-github定制版的dns服务，解析github最优的ip
+github加速神器
 
-### 本机使用
-* 运行FastGithub程序，本机的网络适配器的dns会自动变成127.0.0.1
-* 如果网络适配器的dns没有变成127.0.0.1，请手工修改网络适配器的dns
+### 运行方式
+#### windows本机
+* 双击运行FastGithub.exe程序
+* 程序自动设置网络适配器的主DNS为127.0.0.1
+* 程序自动安装CA证书到`将所有的证书都放入下载存储\受信任的根证书颁发机构` 
+* FastGithub.exe start // 作为windows服务安装并启动
+* FastGithub.exe stop  // 作为windows服务卸载并删除
 
-### 局域网服务器使用(推荐)
+#### linux本机
+* 执行./FastGithub运行程序
+* 手工将你的电脑的主DNS设置为127.0.0.1
+* 手工在你的电脑安装CA证书到系统根证书存储区
+
+#### 局域网服务器
 * 在局域网服务器运行FastGithub程序
-* 手工修改你电脑的网络适配器的dns，值为局域网服务器的ip
+* 手工将你的电脑的主DNS设置为局域网服务器的ip
+* 手工在你的电脑安装CA证书到系统根证书存储区
 
-### 以windows服务运行
-以管理员身份运行cmd，键入如下命令，其中D:\Softs为软件实际目录
-* D:\Softs\FastGithub.exe start // 安装并启动服务
-* D:\Softs\FastGithub.exe stop  // 卸载并删除服务
+
+### 证书验证
+#### git ssl验证不通过
+使用FastGithub之后，git请求时会遇到SSL certificate problem: unable to get local issuer certificate
+需要关闭git的证书验证：
+```
+git config --global http.sslverify false
+```
+
+### 配置文件
+#### 主配置文件
+appsettings.json为主配置文件，里面有dns配置和域名的配置示例。
+
+#### 子配置文件
+appsettings.*.json为子配置文件，默认有github和stackoverflow的配置，新增子配置文件后需要重启FastGithub才生效。

@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using FastGithub.DomainResolve;
+using FastGithub.Http;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,16 +14,20 @@ namespace FastGithub.Upgrade
     /// </summary>
     sealed class UpgradeService
     {
+        private readonly IDomainResolver domainResolver;
         private readonly ILogger<UpgradeService> logger;
-        private const string DownloadPage = "https://gitee.com/jiulang/fast-github/releases";
-        private const string ReleasesUri = "https://gitee.com/api/v5/repos/jiulang/fast-github/releases?page=1&per_page=1&direction=desc";
+        private readonly Uri releasesUri = new("https://api.github.com/repos/xljiulang/fastgithub/releases");
 
         /// <summary>
         /// 升级服务
         /// </summary>
+        /// <param name="domainResolver"></param>
         /// <param name="logger"></param>
-        public UpgradeService(ILogger<UpgradeService> logger)
+        public UpgradeService(
+            IDomainResolver domainResolver,
+            ILogger<UpgradeService> logger)
         {
+            this.domainResolver = domainResolver;
             this.logger = logger;
         }
 
@@ -48,8 +53,12 @@ namespace FastGithub.Upgrade
             var lastedVersion = lastRelease.GetProductionVersion();
             if (lastedVersion.CompareTo(currentVersion) > 0)
             {
-                this.logger.LogInformation($"您正在使用{currentVersion}版本{Environment.NewLine}请前往{DownloadPage}下载新版本");
+                this.logger.LogInformation($"当前版本{currentVersion}为老版本{Environment.NewLine}请前往{lastRelease.HtmlUrl}下载新版本");
                 this.logger.LogInformation(lastRelease.ToString());
+            }
+            else
+            {
+                this.logger.LogInformation($"当前版本{currentVersion}为最新版本");
             }
         }
 
@@ -57,11 +66,24 @@ namespace FastGithub.Upgrade
         /// 获取最新发布
         /// </summary>
         /// <returns></returns>
-        public async Task<GiteeRelease?> GetLastedReleaseAsync(CancellationToken cancellationToken)
+        public async Task<GithubRelease?> GetLastedReleaseAsync(CancellationToken cancellationToken)
         {
-            using var httpClient = new HttpClient();
-            var releases = await httpClient.GetFromJsonAsync<GiteeRelease[]>(ReleasesUri, cancellationToken);
-            return releases?.FirstOrDefault();
+            var domainConfig = new DomainConfig
+            {
+                TlsSni = false,
+                TlsIgnoreNameMismatch = true,
+                Timeout = TimeSpan.FromSeconds(30d)
+            };
+
+            using var request = new GithubRequestMessage
+            {
+                RequestUri = this.releasesUri
+            };
+
+            using var httpClient = new HttpClient(domainConfig, this.domainResolver);
+            var response = await httpClient.SendAsync(request, cancellationToken);
+            var releases = await response.Content.ReadFromJsonAsync<GithubRelease[]>(cancellationToken: cancellationToken);
+            return releases?.FirstOrDefault(item => item.Prerelease == false);
         }
     }
 }

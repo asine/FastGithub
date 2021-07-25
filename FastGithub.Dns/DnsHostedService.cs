@@ -1,5 +1,4 @@
-﻿using DNS.Server;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -12,41 +11,78 @@ namespace FastGithub.Dns
     /// <summary>
     /// dns后台服务
     /// </summary>
-    sealed class DnsHostedService : IHostedService
+    sealed class DnsHostedService : BackgroundService
     {
         private readonly DnsServer dnsServer;
-        private readonly IOptions<DnsOptions> options;
+        private readonly HostsFileValidator hostsValidator;
         private readonly ILogger<DnsHostedService> logger;
-        private IPAddress[]? dnsAddresses;
 
         /// <summary>
         /// dns后台服务
         /// </summary>
-        /// <param name="githubRequestResolver"></param>
+        /// <param name="dnsServer"></param>
+        /// <param name="hostsValidator"></param>
         /// <param name="options"></param>
         /// <param name="logger"></param>
         public DnsHostedService(
-            GithubRequestResolver githubRequestResolver,
-            IOptions<DnsOptions> options,
+            DnsServer dnsServer,
+            HostsFileValidator hostsValidator,
+            IOptionsMonitor<FastGithubOptions> options,
             ILogger<DnsHostedService> logger)
         {
-            this.dnsServer = new DnsServer(githubRequestResolver, options.Value.UpStream);
-            this.options = options;
+            this.dnsServer = dnsServer;
+            this.hostsValidator = hostsValidator;
             this.logger = logger;
+
+            options.OnChange(opt =>
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    SystemDnsUtil.DnsFlushResolverCache();
+                }
+            });
         }
 
         /// <summary>
-        /// 启动dns服务
+        /// 启动dns
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task StartAsync(CancellationToken cancellationToken)
+        public override async Task StartAsync(CancellationToken cancellationToken)
         {
-            this.dnsServer.Listen();
-            this.logger.LogInformation("dns服务启用成功");
-            this.dnsAddresses = this.SetNameServers(IPAddress.Loopback, this.options.Value.UpStream);
+            this.dnsServer.Bind(IPAddress.Any, 53);
+            this.logger.LogInformation("DNS服务启动成功");
 
-            return Task.CompletedTask;
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    SystemDnsUtil.DnsSetPrimitive(IPAddress.Loopback);
+                    SystemDnsUtil.DnsFlushResolverCache();
+                    this.logger.LogInformation($"设置为本机主DNS成功");
+                }
+                catch (Exception ex)
+                {
+                    this.logger.LogWarning($"设置为本机主DNS失败：{ex.Message}");
+                }
+            }
+            else
+            {
+                this.logger.LogWarning("平台不支持自动设置DNS，请手动设置网卡的主DNS为127.0.0.1");
+            }
+
+            await this.hostsValidator.ValidateAsync();
+            await base.StartAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// dns后台
+        /// </summary>
+        /// <param name="stoppingToken"></param>
+        /// <returns></returns>
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            return this.dnsServer.ListenAsync(stoppingToken);
         }
 
         /// <summary>
@@ -54,42 +90,25 @@ namespace FastGithub.Dns
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task StopAsync(CancellationToken cancellationToken)
+        public override Task StopAsync(CancellationToken cancellationToken)
         {
             this.dnsServer.Dispose();
-            this.logger.LogInformation("dns服务已终止");
+            this.logger.LogInformation("DNS服务已停止");
 
-            if (this.dnsAddresses != null)
-            {
-                this.SetNameServers(this.dnsAddresses);
-            }
-
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// 设置dns
-        /// </summary>
-        /// <param name="nameServers"></param>
-        /// <returns></returns>
-        private IPAddress[]? SetNameServers(params IPAddress[] nameServers)
-        {
-            if (this.options.Value.SetToLocalMachine && OperatingSystem.IsWindows())
+            if (OperatingSystem.IsWindows())
             {
                 try
                 {
-                    var results = NameServiceUtil.SetNameServers(nameServers);
-                    this.logger.LogInformation($"设置本机dns成功");
-                    return results;
+                    SystemDnsUtil.DnsFlushResolverCache();
+                    SystemDnsUtil.DnsRemovePrimitive(IPAddress.Loopback);
                 }
-
                 catch (Exception ex)
                 {
-                    this.logger.LogWarning($"设置本机dns失败：{ex.Message}");
+                    this.logger.LogWarning($"恢复DNS记录失败：{ex.Message}");
                 }
             }
 
-            return default;
+            return base.StopAsync(cancellationToken);
         }
     }
 }

@@ -16,7 +16,8 @@ namespace FastGithub
         public static IServiceCollection AddAppUpgrade(this IServiceCollection services)
         {
             return services
-                .AddTransient<UpgradeService>()
+                .AddHttpClient()
+                .AddSingleton<UpgradeService>()
                 .AddHostedService<UpgradeHostedService>();
         }
     }
